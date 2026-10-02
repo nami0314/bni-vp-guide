@@ -1,0 +1,4 @@
+{
+  "scriptId": "ここにスクリプトIDを貼る（Apps Script → プロジェクトの設定 → スクリプトID）",
+  "rootDir": "dist"
+}
