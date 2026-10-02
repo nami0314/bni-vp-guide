@@ -673,7 +673,7 @@ function setup() {
  ******************************************************************/
 const SITE = {
   USERS: 'サイト利用者', DASH: '📊ダッシュボード', LOG: '日次ログ',
-  DAILY_GOAL: 10,           // 1ローンチあたりの1日の声かけ目標（ホームのメーターに使用）
+  DAILY_GOAL: 10,           // 声かけ目標の既定値（設定シートの「声かけ目標（1日）」が空のローンチに使う）
   TITLE: 'ローンチ進捗ボード',
 };
 const U = { NAME: 1, ROLE: 2, LAUNCH: 3, MAIL: 4, KEY: 5, URL: 6 };  // サイト利用者の列
@@ -733,7 +733,18 @@ function siteSettings_() {
   const n = (k, d) => (typeof m[k] === 'number' ? m[k] : d);
   return { p1: n('フェーズ1期限（日）', 42), p2: n('フェーズ2期限（日）', 28), yline: n('黄色判定ライン（目標ペース比）', 0.7),
     near: n('期限間近アラート（残日数）', 7), nolog: n('ログ未入力アラート（日）', 3), idle: n('CCS放置アラート（日）', 3),
-    weekStart: isDate_(m['週次推移の開始日（月曜）']) ? ymd_(m['週次推移の開始日（月曜）']) : '', dailyGoal: SITE.DAILY_GOAL };
+    weekStart: isDate_(m['週次推移の開始日（月曜）']) ? ymd_(m['週次推移の開始日（月曜）']) : '', dailyGoal: SITE.DAILY_GOAL, goals: goalMap_() };
+}
+// 設定シートの「LD一覧」と同じ行にある「声かけ目標（1日）」を、ローンチ名 → 人数で返す
+function goalMap_() {
+  const st = sh_('SETTING');
+  const head = st.getRange(3, 1, 1, st.getLastColumn()).getValues()[0].map(str_);
+  const ldCol = head.indexOf('LD一覧') + 1, gCol = head.indexOf('声かけ目標（1日）') + 1;
+  const m = {};
+  if (!ldCol || !gCol) return m;
+  const v = st.getRange(4, 1, 20, Math.max(ldCol, gCol)).getValues();
+  v.forEach(r => { const n = str_(r[ldCol - 1]), g = Number(r[gCol - 1]); if (n && r[gCol - 1] !== '' && g >= 0) m[n] = g; });
+  return m;
 }
 function stageList_() {
   const st = sh_('SETTING');
@@ -1004,6 +1015,7 @@ const PAGE_HTML_LINES = [
   ".brand small{display:block;color:var(--muted);font-size:12px}",
   ".who{font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center}",
   ".who b{color:var(--ink);font-weight:500}",
+  "label.filter{display:block;margin:0 0 12px;font-size:13px}",
   "select,input,textarea{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px}",
   "select:focus-visible,input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--navy);outline-offset:1px}",
   "nav{display:flex;gap:4px;overflow-x:auto;padding-bottom:8px}",
@@ -1142,6 +1154,7 @@ const PAGE_HTML_LINES = [
   "function formalCount(ld){return D.pros.filter(p=>p.ld===ld&&isFormal(p)).length}",
   "function lastLog(ld){const d=D.logs.filter(x=>x.ld===ld).map(x=>x.date);return d.length?new Date(Math.max.apply(null,d)):null}",
   "function deadline(L){if(!L.start)return null;return L.phase==='フェーズ1'?addD(L.start,D.set.p1):L.phase==='フェーズ2'?addD(L.start,D.set.p2):null}",
+  "function goalOf(ld){const g=D.set.goals&&D.set.goals[ld];return typeof g==='number'?g:D.set.dailyGoal}",
   "function active(L){return /^フェーズ/.test(L.phase||'')}",
   "function signal(L){ if(!L.start||!L.target)return{c:'p-n',t:L.phase||'準備中'}; const J=formalCount(L.ld),G=deadline(L); if(J>=L.target)return{c:'p-ok',t:'達成'};",
   "  if(!G)return{c:'p-warn',t:'進行中'}; const left=diff(G,TODAY); if(left<0)return{c:'p-bad',t:'期限超過'};",
@@ -1178,7 +1191,7 @@ const PAGE_HTML_LINES = [
   "    return; }",
   "  const Ls=D.launches.filter(active);",
   "  const koe=Ls.reduce((a,L)=>a+sumLog(L.ld,TODAY,TODAY,'koe'),0), men=Ls.reduce((a,L)=>a+sumLog(L.ld,TODAY,TODAY,'men'),0);",
-  "  const goal=Ls.length*D.set.dailyGoal; const entered=Ls.filter(L=>logOn(L.ld,TODAY).length).length;",
+  "  const goal=Ls.reduce((a,L)=>a+goalOf(L.ld),0); const entered=Ls.filter(L=>logOn(L.ld,TODAY).length).length;",
   "  const rows=D.launches.map(L=>{ const s=signal(L); const days=[0,1,2,3,4,5,6].map(i=>sumLog(L.ld,addD(TODAY,i-6),addD(TODAY,i-6),'koe')); const mx=Math.max(10,Math.max.apply(null,days));",
   "    const ll=lastLog(L.ld); const n=ll?diff(TODAY,ll):null; const G=deadline(L);",
   "    const inp=!active(L)?'<span class=\"muted\">―</span>':n===0?'<span style=\"color:var(--ok);font-weight:500\">入力済</span>':'<span style=\"color:'+((n==null||n>=D.set.nolog)?'var(--bad)':'var(--warn)')+';font-weight:500\">'+(n==null?'未入力':n+'日未入力')+'</span>';",
@@ -1254,13 +1267,16 @@ const PAGE_HTML_LINES = [
   "  b.disabled=true; toast('保存しています…');",
   "  api('webUpdateProspect',row,patch).then(r=>load(r&&r.formal?p.name+'さんが正式プリコアになりました。入会後の行動リストを作成しました':p.name+'さんを更新しました')).catch(ex=>{toast(ex.message);b.disabled=false;}); });",
   "",
-  "function renderMember(){ const ms=membersOf();",
-  "  document.getElementById('v-member').innerHTML='<h2>入会者の行動リスト</h2><p class=\"muted\" style=\"margin:0 0 12px\">正式プリコアになると、入会後の流れが自動で並びます。終わったらチェックを入れてください。<span class=\"dna\">DNA</span> はDNA・LDのタスクです。</p>'+",
+  "let MEMBER_LD='';",
+  "function renderMember(){ const all=membersOf(); const lds=Array.from(new Set(D.launches.map(L=>L.ld).concat(all.map(m=>m.ld))));",
+  "  if(lds.indexOf(MEMBER_LD)<0)MEMBER_LD=''; const ms=MEMBER_LD?all.filter(m=>m.ld===MEMBER_LD):all;",
+  "  const sel=lds.length>1?'<label class=\"filter\" for=\"m-ld\">ローンチで絞り込む <select id=\"m-ld\"><option value=\"\">すべてのローンチ（'+all.length+'人）</option>'+lds.map(n=>'<option value=\"'+esc(n)+'\"'+(n===MEMBER_LD?' selected':'')+'>'+esc(n)+'（'+all.filter(m=>m.ld===n).length+'人）</option>').join('')+'</select></label>':'';",
+  "  document.getElementById('v-member').innerHTML='<h2>入会者の行動リスト</h2><p class=\"muted\" style=\"margin:0 0 12px\">正式プリコアになると、入会後の流れが自動で並びます。終わったらチェックを入れてください。<span class=\"dna\">DNA</span> はDNA・LDのタスクです。</p>'+sel+",
   "    '<div class=\"cards\">'+(ms.length?ms.map(m=>{ const ts=m.tasks; const done=ts.filter(t=>t.done).length; const late=ts.filter(t=>!t.done&&t.due&&t.due<TODAY).length;",
   "      return '<div class=\"card '+(late?'alert':'')+'\"><div class=\"row\"><div><h3>'+esc(m.name)+'</h3><div class=\"meta\">'+esc(m.p&&m.p.co||'')+(m.p&&m.p.tan?'｜担当 '+esc(m.p.tan):'')+'｜'+esc(m.ld)+'</div></div><span class=\"meta num\">'+(m.p&&m.p.formal?'入会 '+fmt(m.p.formal):'')+'</span></div>'+",
   "        '<div><div class=\"row meta\"><span>'+done+' / '+ts.length+' 完了</span>'+(late?'<span class=\"alerttxt\">'+late+'件 期限超過</span>':'')+'</div><div class=\"prog\"><i style=\"width:'+Math.round(done/Math.max(1,ts.length)*100)+'%\"></i></div></div>'+",
   "        '<ul class=\"tasks\">'+ts.map(t=>'<li><input type=\"checkbox\" id=\"t-'+t.row+'\" data-row=\"'+t.row+'\" '+(t.done?'checked':'')+'><label for=\"t-'+t.row+'\" style=\"'+(t.done?'color:var(--muted);text-decoration:line-through':'')+'\">'+esc(t.task)+'</label>'+(t.kind==='DNA'?'<span class=\"dna\">DNA</span>':'')+(t.done?'':(t.due&&t.due<TODAY)?'<span class=\"late\">'+fmt(t.due)+' 超過</span>':'<span class=\"due\">'+(t.due?fmt(t.due)+'まで':'')+'</span>')+'</li>').join('')+'</ul></div>'}).join(''):'<div class=\"empty\">まだ入会者はいません。CCS追っかけで3点に✓が付くと、ここに表示されます。</div>')+'</div>';}",
-  "document.getElementById('v-member').addEventListener('change',e=>{ const c=e.target; if(!c.dataset.row)return; c.disabled=true;",
+  "document.getElementById('v-member').addEventListener('change',e=>{ const c=e.target; if(c.id==='m-ld'){MEMBER_LD=c.value;renderMember();return;} if(!c.dataset.row)return; c.disabled=true;",
   "  api('webSetTaskDone',+c.dataset.row,c.checked).then(()=>load(c.checked?'完了にしました':'未完了に戻しました')).catch(ex=>{toast(ex.message);c.checked=!c.checked;c.disabled=false;}); });",
   "",
   "function renderTrend(){ if(!isLead())return; const Ls=D.launches.filter(active); const N=14; const days=[]; for(let i=0;i<N;i++)days.push(addD(TODAY,i-N+1));",

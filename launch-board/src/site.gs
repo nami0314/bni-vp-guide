@@ -6,7 +6,7 @@
  ******************************************************************/
 const SITE = {
   USERS: 'サイト利用者', DASH: '📊ダッシュボード', LOG: '日次ログ',
-  DAILY_GOAL: 10,           // 1ローンチあたりの1日の声かけ目標（ホームのメーターに使用）
+  DAILY_GOAL: 10,           // 声かけ目標の既定値（設定シートの「声かけ目標（1日）」が空のローンチに使う）
   TITLE: 'ローンチ進捗ボード',
 };
 const U = { NAME: 1, ROLE: 2, LAUNCH: 3, MAIL: 4, KEY: 5, URL: 6 };  // サイト利用者の列
@@ -66,7 +66,18 @@ function siteSettings_() {
   const n = (k, d) => (typeof m[k] === 'number' ? m[k] : d);
   return { p1: n('フェーズ1期限（日）', 42), p2: n('フェーズ2期限（日）', 28), yline: n('黄色判定ライン（目標ペース比）', 0.7),
     near: n('期限間近アラート（残日数）', 7), nolog: n('ログ未入力アラート（日）', 3), idle: n('CCS放置アラート（日）', 3),
-    weekStart: isDate_(m['週次推移の開始日（月曜）']) ? ymd_(m['週次推移の開始日（月曜）']) : '', dailyGoal: SITE.DAILY_GOAL };
+    weekStart: isDate_(m['週次推移の開始日（月曜）']) ? ymd_(m['週次推移の開始日（月曜）']) : '', dailyGoal: SITE.DAILY_GOAL, goals: goalMap_() };
+}
+// 設定シートの「LD一覧」と同じ行にある「声かけ目標（1日）」を、ローンチ名 → 人数で返す
+function goalMap_() {
+  const st = sh_('SETTING');
+  const head = st.getRange(3, 1, 1, st.getLastColumn()).getValues()[0].map(str_);
+  const ldCol = head.indexOf('LD一覧') + 1, gCol = head.indexOf('声かけ目標（1日）') + 1;
+  const m = {};
+  if (!ldCol || !gCol) return m;
+  const v = st.getRange(4, 1, 20, Math.max(ldCol, gCol)).getValues();
+  v.forEach(r => { const n = str_(r[ldCol - 1]), g = Number(r[gCol - 1]); if (n && r[gCol - 1] !== '' && g >= 0) m[n] = g; });
+  return m;
 }
 function stageList_() {
   const st = sh_('SETTING');

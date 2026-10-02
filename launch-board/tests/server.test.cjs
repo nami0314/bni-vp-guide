@@ -15,9 +15,9 @@ const d=(s)=>new Date(s+'T00:00:00+09:00'); const T0='2026-09-30';
 const E=()=>[[],[],[],[]];
 function ccs(ld,tan,name,stage,app,pay,agr,formal,last,next,due){const r=[];r[1]=ld;r[2]=tan;r[3]=name;r[6]=name+'商事';r[9]=stage;r[12]=app;r[13]=pay;r[14]=agr;r[16]=formal;r[17]=last;r[19]=next;r[20]=due;r[21]='進行中';return r;}
 function ldSheet(team,phase,start,target,first){const v=[];for(let i=0;i<28;i++)v.push([]);v[3][1]=team;v[5][1]='テストCH';v[7][1]=first;v[23][1]=phase;v[24][1]=start;v[25][1]=target;v[26][1]='課題メモ';return v;}
-const set=[[],[],[,,,'フェーズ','チーム','声かけ状況','候補者の状態','要否','LD一覧','現状'],
- ['フェーズ1期限（日）',42,,,,,,,'石川','リストアップ済'],['フェーズ2期限（日）',28,,,,,,,'竹尾','説明会お誘い中'],['黄色判定ライン（目標ペース比）',0.7,,,,,,,,'CCS依頼中'],
- ['期限間近アラート（残日数）',7,,,,,,,,'CCS済'],['ログ未入力アラート（日）',3],['CCS放置アラート（日）',3],['本人リマインド再送間隔（日）',2],['初回定例会前の警戒期間（日）',7],['週次推移の開始日（月曜）',d('2026-10-05')]];
+const set=[[],[],[,,,'フェーズ','チーム','声かけ状況','候補者の状態','要否','LD一覧','声かけ目標（1日）','現状'],
+ ['フェーズ1期限（日）',42,,,,,,,'石川',15,'リストアップ済'],['フェーズ2期限（日）',28,,,,,,,'竹尾','','説明会お誘い中'],['黄色判定ライン（目標ペース比）',0.7,,,,,,,,,'CCS依頼中'],
+ ['期限間近アラート（残日数）',7,,,,,,,,,'CCS済'],['ログ未入力アラート（日）',3],['CCS放置アラート（日）',3],['本人リマインド再送間隔（日）',2],['初回定例会前の警戒期間（日）',7],['週次推移の開始日（月曜）',d('2026-10-05')]];
 const logs=E(); for(let i=10;i>=0;i--){logs.push([d('2026-09-'+String(30-i).padStart(2,'0')),'石川','石川',5+i%3,1,1,'','','','']); if(i>3)logs.push([d('2026-09-'+String(30-i).padStart(2,'0')),'竹尾','竹尾',4,0,0,'','','','']);}
 const sheets={
  'CCS追っかけ':mkSheet('CCS追っかけ',E().concat([
@@ -53,6 +53,7 @@ const om=webGetData('KOM'), ld=webGetData('KLD'), tan=webGetData('KTAN');
 ok('OMは全ローンチが見える', om.launches.length===3 && om.pros.length===4);
 ok('LDは自分のローンチだけ', ld.launches.length===1 && ld.pros.every(p=>p.ld==='石川'));
 ok('担当は自分の見込み客だけ・日次ログは見えない', tan.pros.every(p=>p.tan==='村上') && tan.logs.length===0);
+ok('声かけ目標は設定シートから読む（空欄は既定値）', om.set.goals['石川']===15 && om.set.goals['竹尾']===undefined && om.set.dailyGoal===10);
 ok('不正なキーは拒否', !!webGetData('nope').error);
 ok('担当は日次実績を入力できない', !!webSaveLog('KTAN',{ld:'石川',date:'2026/09/30'}).error);
 ok('LDは他ローンチに入力できない', !!webSaveLog('KLD',{ld:'竹尾',date:'2026/09/30'}).error);
